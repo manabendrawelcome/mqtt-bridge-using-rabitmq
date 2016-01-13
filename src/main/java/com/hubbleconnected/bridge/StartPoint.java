@@ -1,11 +1,12 @@
 package com.hubbleconnected.bridge;
 
+import org.apache.log4j.Logger;
 import org.eclipse.paho.client.mqttv3.MqttException;
 
-public class Start {
-
-	public static void main(String[] args) {
-		
+public class StartPoint {
+	final static Logger logger = Logger.getLogger(StartPoint.class);
+	
+	public void start(){
 		try {
 			MqttPahoClient mqttPahoClient = new MqttPahoClient();
 			RabitMqClient rabitMqClient = new RabitMqClient();
@@ -15,9 +16,12 @@ public class Start {
 			rabitMqClient.start();
 			
 		} catch (MqttException e) {
-			e.printStackTrace();
+			logger.error(e);
 		}
-
 	}
 
+	public static void main(String[] args) {
+		StartPoint s = new StartPoint();
+		s.start();
+	}
 }

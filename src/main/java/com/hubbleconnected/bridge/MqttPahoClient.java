@@ -1,5 +1,8 @@
 package com.hubbleconnected.bridge;
 
+import java.util.concurrent.ConcurrentHashMap;
+
+import org.apache.log4j.Logger;
 import org.eclipse.paho.client.mqttv3.IMqttDeliveryToken;
 import org.eclipse.paho.client.mqttv3.MqttCallback;
 import org.eclipse.paho.client.mqttv3.MqttClient;
@@ -9,53 +12,52 @@ import org.eclipse.paho.client.mqttv3.MqttPersistenceException;
 
 public class MqttPahoClient implements MqttCallback {
 	
-	private final static String TOPIC_NAME = "myTopic";
-	private final static String MQTT_SERVER_URL = "tcp://54.209.195.112:1883";
-	MqttClient client;
+	final static Logger logger = Logger.getLogger(MqttPahoClient.class);
+	MqttClient mqttClient;
 	RabitMqClient rabitMqClient;
-
+	private static ConcurrentHashMap<String, String> mapMessages = new ConcurrentHashMap<String, String>();
+	Utils utils;
+	
 	public MqttPahoClient() throws MqttException {
-		client = new MqttClient(MQTT_SERVER_URL, "MqttPahoClient");
-		client.connect();
-		client.setCallback(this);
+		utils = new Utils();
+		mqttClient = new MqttClient(utils.getProperty("mqtt_server_url"), utils.getProperty("paho_client_id"));
+		mqttClient.connect();
+		mqttClient.setCallback(this);
 	}
 
 	public void start() {
 		try {
-			System.out.println("--------mqtt client started-----------");
-			
-			client.subscribe(TOPIC_NAME);
-
+			mqttClient.subscribe(utils.getProperty("topic_name"), Integer.parseInt(utils.getProperty("qos")));
+			logger.info("MQTT Paho Client Started...");
 		} catch (MqttException e) {
-			e.printStackTrace();
+			logger.error(e);
 		}
 	}
 
-	public void sendMessage(String msg) throws MqttPersistenceException,
-			MqttException {
+	public void sendMessage(String topic, String msg)
+			throws MqttPersistenceException, MqttException {
 		MqttMessage message = new MqttMessage();
 		message.setPayload(msg.getBytes());
-		client.publish(TOPIC_NAME, message);
+		message.setQos(Integer.parseInt(utils.getProperty("qos")));
+		mqttClient.publish(topic, message);
+		mapMessages.put(topic.concat(utils.getProperty("delimiter")).concat(msg), "");
 	}
 
-	// @Override
 	public void connectionLost(Throwable cause) {
-		System.out.println("connectionLost...");
-		System.out.println(cause);
-
+		logger.error("connectionLost...");
 	}
 
-	// @Override
 	public void messageArrived(String topic, MqttMessage message)
 			throws Exception {
-		System.out.println("Message published from Mqtt:: " + message);
-		rabitMqClient.sendMessage(message.toString());
+		String temp_msg = mapMessages.get(topic.concat(utils.getProperty("delimiter")).concat(message.toString()));
+		if (temp_msg != null) {
+			mapMessages.remove(topic.concat(utils.getProperty("delimiter")).concat(message.toString()));
+		} else {
+			rabitMqClient.sendMessage(topic, message.toString());
+		}
 	}
 
-	// @Override
 	public void deliveryComplete(IMqttDeliveryToken token) {
-		System.out.println("deliveryComplete...");
-
 	}
 
 	public void setRabitMqClient(RabitMqClient rabitMqClient) {
